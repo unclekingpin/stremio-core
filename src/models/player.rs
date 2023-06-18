@@ -1,4 +1,8 @@
-use crate::constants::{CREDITS_THRESHOLD_COEF, WATCHED_THRESHOLD_COEF};
+use std::marker::PhantomData;
+
+use crate::constants::{
+    CREDITS_THRESHOLD_COEF, VIDEO_HASH_EXTRA_PROP, VIDEO_SIZE_EXTRA_PROP, WATCHED_THRESHOLD_COEF,
+};
 use crate::models::common::{
     eq_update, resource_update, resources_update_with_vector_content, Loadable, ResourceAction,
     ResourceLoadable, ResourcesAction,
@@ -6,21 +10,28 @@ use crate::models::common::{
 use crate::models::ctx::Ctx;
 use crate::runtime::msg::{Action, ActionLoad, ActionPlayer, Event, Internal, Msg};
 use crate::runtime::{Effects, Env, UpdateWithCtx};
-use crate::types::addon::{AggrRequest, ResourcePath, ResourceRequest};
+use crate::types::addon::{AggrRequest, ExtraExt, ResourcePath, ResourceRequest};
 use crate::types::library::{LibraryBucket, LibraryItem};
 use crate::types::profile::Settings as ProfileSettings;
 use crate::types::resource::{MetaItem, SeriesInfo, Stream, Subtitles, Video};
-use chrono::{DateTime, Utc};
+
+use stremio_watched_bitfield::WatchedBitField;
+
+use chrono::{DateTime, Duration, Utc};
+use derivative::Derivative;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
-use std::cmp;
-use std::marker::PhantomData;
-use stremio_watched_bitfield::WatchedBitField;
+
+use lazy_static::lazy_static;
 
 use super::common::resource_update_with_vector_content;
 
-#[derive(Clone, Default, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(debug_assertions, derive(Debug))]
+lazy_static! {
+    /// The duration that must have passed in order for a library item to be updated.
+    pub static ref PUSH_TO_LIBRARY_EVERY: Duration = Duration::seconds(30);
+}
+
+#[derive(Clone, Default, PartialEq, Eq, Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct AnalyticsContext {
     #[serde(rename = "libItemID")]
@@ -43,18 +54,24 @@ pub struct AnalyticsContext {
     pub has_trakt: bool,
 }
 
-#[derive(Clone, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(debug_assertions, derive(Debug))]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct VideoParams {
+    pub hash: Option<String>,
+    pub size: Option<u64>,
+}
+
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Selected {
     pub stream: Stream,
     pub stream_request: Option<ResourceRequest>,
     pub meta_request: Option<ResourceRequest>,
     pub subtitles_path: Option<ResourcePath>,
+    pub video_params: Option<VideoParams>,
 }
 
-#[derive(Default, Serialize)]
-#[cfg_attr(debug_assertions, derive(Debug))]
+#[derive(Default, Derivative, Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Player {
     pub selected: Option<Selected>,
@@ -70,6 +87,9 @@ pub struct Player {
     pub analytics_context: Option<AnalyticsContext>,
     #[serde(skip_serializing)]
     pub load_time: Option<DateTime<Utc>>,
+    #[serde(skip_serializing)]
+    #[derivative(Default(value = "Utc.timestamp_opt(0, 0).unwrap()"))]
+    pub push_library_item_time: DateTime<Utc>,
     #[serde(skip_serializing)]
     pub loaded: bool,
     #[serde(skip_serializing)]
@@ -126,7 +146,27 @@ impl<E: Env + 'static> UpdateWithCtx<E> for Player {
                     Some(subtitles_path) => resources_update_with_vector_content::<E, _>(
                         &mut self.subtitles,
                         ResourcesAction::ResourcesRequested {
-                            request: &AggrRequest::AllOfResource(subtitles_path.to_owned()),
+                            request: &AggrRequest::AllOfResource(ResourcePath {
+                                extra: subtitles_path
+                                    .extra
+                                    .to_owned()
+                                    .extend_one(
+                                        &VIDEO_HASH_EXTRA_PROP,
+                                        selected
+                                            .video_params
+                                            .as_ref()
+                                            .and_then(|params| params.hash.to_owned()),
+                                    )
+                                    .extend_one(
+                                        &VIDEO_SIZE_EXTRA_PROP,
+                                        selected
+                                            .video_params
+                                            .as_ref()
+                                            .and_then(|params| params.size)
+                                            .map(|size| size.to_string()),
+                                    ),
+                                ..subtitles_path.to_owned()
+                            }),
                             addons: &ctx.profile.addons,
                         },
                     ),
@@ -152,7 +192,7 @@ impl<E: Env + 'static> UpdateWithCtx<E> for Player {
                     &ctx.library,
                 );
                 let watched_effects =
-                    watched_update::<E>(&mut self.watched, &self.meta_item, &self.library_item);
+                    watched_update(&mut self.watched, &self.meta_item, &self.library_item);
                 let (id, r#type, name, video_id, time, duration) = self
                     .library_item
                     .as_ref()
@@ -202,6 +242,13 @@ impl<E: Env + 'static> UpdateWithCtx<E> for Player {
                 };
                 let switch_to_next_video_effects =
                     switch_to_next_video(&mut self.library_item, &self.next_video);
+                let push_to_library_effects = match &self.library_item {
+                    Some(library_item) => Effects::msg(Msg::Internal(Internal::UpdateLibraryItem(
+                        library_item.to_owned(),
+                    )))
+                    .unchanged(),
+                    _ => Effects::none().unchanged(),
+                };
                 let selected_effects = eq_update(&mut self.selected, None);
                 let meta_item_effects = eq_update(&mut self.meta_item, None);
                 let subtitles_effects = eq_update(&mut self.subtitles, vec![]);
@@ -216,6 +263,7 @@ impl<E: Env + 'static> UpdateWithCtx<E> for Player {
                 self.ended = false;
                 self.paused = None;
                 switch_to_next_video_effects
+                    .join(push_to_library_effects)
                     .join(selected_effects)
                     .join(meta_item_effects)
                     .join(subtitles_effects)
@@ -254,7 +302,7 @@ impl<E: Env + 'static> UpdateWithCtx<E> for Player {
                         library_item.state.flagged_watched = 0;
                     } else {
                         let time_watched =
-                            cmp::min(1000, time.saturating_sub(library_item.state.time_offset));
+                            1000.min(time.saturating_sub(library_item.state.time_offset));
                         library_item.state.time_watched =
                             library_item.state.time_watched.saturating_add(time_watched);
                         library_item.state.overall_time_watched = library_item
@@ -271,10 +319,10 @@ impl<E: Env + 'static> UpdateWithCtx<E> for Player {
                         library_item.state.flagged_watched = 1;
                         library_item.state.times_watched =
                             library_item.state.times_watched.saturating_add(1);
-                        if let Some(watched) = &self.watched {
-                            let mut watched = watched.to_owned();
-                            watched.set_video(video_id, true);
-                            library_item.state.watched = Some(watched.to_string());
+                        if let Some(watched_bit_field) = &self.watched {
+                            let mut watched_bit_field = watched_bit_field.to_owned();
+                            watched_bit_field.set_video(video_id, true);
+                            library_item.state.watched = Some(watched_bit_field.into());
                         }
                     };
                     if library_item.temp && library_item.state.times_watched == 0 {
@@ -291,7 +339,7 @@ impl<E: Env + 'static> UpdateWithCtx<E> for Player {
                         analytics_context.device_name = Some(device.to_owned());
                         analytics_context.player_duration = Some(duration.to_owned());
                     };
-                    if seeking && self.loaded && self.paused.is_some() {
+                    let trakt_event_effects = if seeking && self.loaded && self.paused.is_some() {
                         if self.paused.expect("paused is None") {
                             Effects::msg(Msg::Event(Event::TraktPaused {
                                 context: self
@@ -313,7 +361,21 @@ impl<E: Env + 'static> UpdateWithCtx<E> for Player {
                         }
                     } else {
                         Effects::none()
-                    }
+                    };
+
+                    let push_to_library_effects =
+                        if E::now() - self.push_library_item_time >= *PUSH_TO_LIBRARY_EVERY {
+                            self.push_library_item_time = E::now();
+
+                            Effects::msg(Msg::Internal(Internal::UpdateLibraryItem(
+                                library_item.to_owned(),
+                            )))
+                            .unchanged()
+                        } else {
+                            Effects::none().unchanged()
+                        };
+
+                    trakt_event_effects.join(push_to_library_effects)
                 }
                 _ => Effects::none().unchanged(),
             },
@@ -321,7 +383,7 @@ impl<E: Env + 'static> UpdateWithCtx<E> for Player {
                 if self.selected.is_some() =>
             {
                 self.paused = Some(*paused);
-                if !self.loaded {
+                let trakt_event_effects = if !self.loaded {
                     self.loaded = true;
                     Effects::msg(Msg::Event(Event::PlayerPlaying {
                         load_time: self
@@ -343,7 +405,15 @@ impl<E: Env + 'static> UpdateWithCtx<E> for Player {
                         context: self.analytics_context.as_ref().cloned().unwrap_or_default(),
                     }))
                     .unchanged()
-                }
+                };
+                let update_library_item_effects = match &self.library_item {
+                    Some(library_item) => Effects::msg(Msg::Internal(Internal::UpdateLibraryItem(
+                        library_item.to_owned(),
+                    )))
+                    .unchanged(),
+                    _ => Effects::none().unchanged(),
+                };
+                trakt_event_effects.join(update_library_item_effects)
             }
             Msg::Action(Action::Player(ActionPlayer::Ended)) if self.selected.is_some() => {
                 self.ended = true;
@@ -354,13 +424,6 @@ impl<E: Env + 'static> UpdateWithCtx<E> for Player {
                 }))
                 .unchanged()
             }
-            Msg::Action(Action::Player(ActionPlayer::PushToLibrary)) => match &self.library_item {
-                Some(library_item) => Effects::msg(Msg::Internal(Internal::UpdateLibraryItem(
-                    library_item.to_owned(),
-                )))
-                .unchanged(),
-                _ => Effects::none().unchanged(),
-            },
             Msg::Internal(Internal::ResourceRequestResult(request, result)) => {
                 let meta_item_effects = match &mut self.meta_item {
                     Some(meta_item) => resource_update::<E, _>(
@@ -401,7 +464,7 @@ impl<E: Env + 'static> UpdateWithCtx<E> for Player {
                     &ctx.library,
                 );
                 let watched_effects =
-                    watched_update::<E>(&mut self.watched, &self.meta_item, &self.library_item);
+                    watched_update(&mut self.watched, &self.meta_item, &self.library_item);
                 let (id, r#type, name, video_id, time, duration) = self
                     .library_item
                     .as_ref()
@@ -463,13 +526,10 @@ fn switch_to_next_video(
                 library_item.state.flagged_watched = 0;
                 library_item.state.time_offset = 1;
             };
-            Effects::msg(Msg::Internal(Internal::UpdateLibraryItem(
-                library_item.to_owned(),
-            )))
-            .unchanged()
         }
-        _ => Effects::none().unchanged(),
-    }
+        _ => {}
+    };
+    Effects::none().unchanged()
 }
 
 fn next_video_update(
@@ -670,7 +730,7 @@ fn library_item_update<E: Env + 'static>(
     }
 }
 
-fn watched_update<E: Env>(
+fn watched_update(
     watched: &mut Option<WatchedBitField>,
     meta_item: &Option<ResourceLoadable<MetaItem>>,
     library_item: &Option<LibraryItem>,
@@ -697,7 +757,6 @@ mod test {
     use crate::{
         constants::YOUTUBE_ADDON_ID_PREFIX,
         models::common::{Loadable, ResourceLoadable},
-        runtime::Effect,
         types::{
             addon::{ResourcePath, ResourceRequest},
             resource::{SeriesInfo, Stream, Video},
@@ -709,9 +768,9 @@ mod test {
 
     #[test]
     fn next_streams_update_with_a_stream_from_next_video() {
-        let current_youtube_1 = format!("{}666:1", YOUTUBE_ADDON_ID_PREFIX);
+        let current_youtube_1 = format!("{YOUTUBE_ADDON_ID_PREFIX}666:1");
         let current_youtube_stream = Stream::youtube(&current_youtube_1).unwrap();
-        let next_youtube_1234 = format!("{}666:1234", YOUTUBE_ADDON_ID_PREFIX);
+        let next_youtube_1234 = format!("{YOUTUBE_ADDON_ID_PREFIX}666:1234");
         let next_youtube_stream = Stream::youtube(&next_youtube_1234).unwrap();
 
         let youtube_base = "https://youtube.com"
@@ -733,6 +792,7 @@ mod test {
             }),
             meta_request: None,
             subtitles_path: None,
+            video_params: None,
         };
 
         // Test that it should update the next_streams from the next_video if Video has one stream
@@ -741,7 +801,7 @@ mod test {
             let next_video = Video {
                 id: "next_video".to_owned(),
                 title: "title".to_owned(),
-                released: Some(Utc.ymd(2020, 1, 1).and_hms(0, 0, 0)),
+                released: Some(Utc.with_ymd_and_hms(2020, 1, 1, 0, 0, 0).unwrap()),
                 overview: Some("overview".to_owned()),
                 thumbnail: Some("thumbnail".to_owned()),
                 streams: vec![next_youtube_stream.clone()],
@@ -755,10 +815,7 @@ mod test {
             );
 
             assert!(result_effects.has_changed);
-            assert!(result_effects
-                .into_iter()
-                .collect::<Vec<Effect>>()
-                .is_empty());
+            assert!(result_effects.into_iter().next().is_none());
             assert_eq!(
                 next_streams.as_ref().unwrap().request.path.id,
                 "next_video",
@@ -778,14 +835,14 @@ mod test {
 
         // Test that it should update next_streams using all streams in Video
         {
-            let another_youtube_5678 = format!("{}666:5678", YOUTUBE_ADDON_ID_PREFIX);
+            let another_youtube_5678 = format!("{YOUTUBE_ADDON_ID_PREFIX}666:5678");
             let another_youtube_stream = Stream::youtube(&another_youtube_5678).unwrap();
             let youtube_streams = vec![next_youtube_stream, another_youtube_stream];
             let mut next_streams = Some(next_streams.clone());
             let next_video = Video {
                 id: "next_video_2".to_owned(),
                 title: "title".to_owned(),
-                released: Some(Utc.ymd(2020, 1, 1).and_hms(0, 0, 0)),
+                released: Some(Utc.with_ymd_and_hms(2020, 1, 1, 0, 0, 0).unwrap()),
                 overview: Some("overview".to_owned()),
                 thumbnail: Some("thumbnail".to_owned()),
                 streams: youtube_streams.clone(),
@@ -799,10 +856,7 @@ mod test {
             );
 
             assert!(result_effects.has_changed);
-            assert!(result_effects
-                .into_iter()
-                .collect::<Vec<Effect>>()
-                .is_empty());
+            assert!(result_effects.into_iter().next().is_none());
 
             assert_eq!(
                 next_streams.as_ref().unwrap().request.path.id,
@@ -823,11 +877,11 @@ mod test {
 
         // Test that it should make a request to get next_streams if no streams are available in Video
         {
-            let mut next_streams = Some(next_streams.clone());
+            let mut next_streams = Some(next_streams);
             let next_video = Video {
                 id: "next_video_3".to_owned(),
                 title: "title".to_owned(),
-                released: Some(Utc.ymd(2020, 1, 1).and_hms(0, 0, 0)),
+                released: Some(Utc.with_ymd_and_hms(2020, 1, 1, 0, 0, 0).unwrap()),
                 overview: Some("overview".to_owned()),
                 thumbnail: Some("thumbnail".to_owned()),
                 // empty streams will cause a request to be made
@@ -838,11 +892,11 @@ mod test {
             let result_effects = next_streams_update::<TestEnv>(
                 &mut next_streams,
                 &Some(next_video),
-                &Some(selected.clone()),
+                &Some(selected),
             );
 
             assert!(result_effects.has_changed);
-            assert_eq!(1, result_effects.into_iter().collect::<Vec<Effect>>().len());
+            assert_eq!(1, result_effects.into_iter().count());
             assert_eq!(
                 next_streams.as_ref().unwrap().request.path.id,
                 "next_video_3",

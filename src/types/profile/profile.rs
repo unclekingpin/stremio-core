@@ -7,11 +7,14 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use url::Url;
 
+/// User ID
+///
+/// `Some` when authenticated
+/// `None` if not authenticated
 pub type UID = Option<String>;
 
 #[serde_as]
-#[derive(Clone, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(debug_assertions, derive(Debug))]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize, Debug)]
 pub struct Profile {
     pub auth: Option<Auth>,
     #[serde_as(deserialize_as = "UniqueVec<Vec<_>, DescriptorUniqueVecAdapter>")]

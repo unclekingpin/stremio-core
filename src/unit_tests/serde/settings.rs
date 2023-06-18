@@ -1,6 +1,5 @@
-use crate::types::profile::Settings;
-use chrono::prelude::TimeZone;
-use chrono::Utc;
+use crate::types::profile::{FrameRateMatchingStrategy, Settings};
+use chrono::{TimeZone, Utc};
 use serde_test::{assert_de_tokens, assert_tokens, Token};
 use url::Url;
 
@@ -10,10 +9,12 @@ fn settings() {
         &Settings {
             interface_language: "interface_language".to_owned(),
             streaming_server_url: Url::parse("https://streaming_server_url").unwrap(),
+            player_type: Some("player".to_owned()),
             binge_watching: true,
             play_in_background: true,
-            play_in_external_player: true,
             hardware_decoding: true,
+            frame_rate_matching_strategy: FrameRateMatchingStrategy::FrameRateAndResolution,
+            next_video_notification_duration: 30,
             audio_passthrough: true,
             audio_language: "audio_language".to_owned(),
             secondary_audio_language: Some("secondary_audio_language".to_owned()),
@@ -27,25 +28,35 @@ fn settings() {
             subtitles_background_color: "subtitles_background_color".to_owned(),
             subtitles_outline_color: "subtitles_outline_color".to_owned(),
             seek_time_duration: 1,
-            streaming_server_warning_dismissed: Some(Utc.ymd(2021, 1, 1).and_hms_milli(0, 0, 0, 0)),
+            streaming_server_warning_dismissed: Some(
+                Utc.with_ymd_and_hms(2021, 1, 1, 0, 0, 0).unwrap(),
+            ),
         },
         &[
             Token::Struct {
                 name: "Settings",
-                len: 20,
+                len: 22,
             },
             Token::Str("interfaceLanguage"),
             Token::Str("interface_language"),
             Token::Str("streamingServerUrl"),
             Token::Str("https://streaming_server_url/"),
+            Token::Str("playerType"),
+            Token::Some,
+            Token::Str("player"),
             Token::Str("bingeWatching"),
             Token::Bool(true),
             Token::Str("playInBackground"),
             Token::Bool(true),
-            Token::Str("playInExternalPlayer"),
-            Token::Bool(true),
             Token::Str("hardwareDecoding"),
             Token::Bool(true),
+            Token::Str("frameRateMatchingStrategy"),
+            Token::UnitVariant {
+                name: "FrameRateMatchingStrategy",
+                variant: "FrameRateAndResolution",
+            },
+            Token::Str("nextVideoNotificationDuration"),
+            Token::U32(30),
             Token::Str("audioPassthrough"),
             Token::Bool(true),
             Token::Str("audioLanguage"),
@@ -89,20 +100,27 @@ fn settings_de() {
         &[
             Token::Struct {
                 name: "Settings",
-                len: 18,
+                len: 17,
             },
             Token::Str("interfaceLanguage"),
             Token::Str("eng"),
             Token::Str("streamingServerUrl"),
             Token::Str("http://127.0.0.1:11470/"),
+            Token::Str("playerType"),
+            Token::None,
             Token::Str("bingeWatching"),
-            Token::Bool(false),
+            Token::Bool(true),
             Token::Str("playInBackground"),
             Token::Bool(true),
-            Token::Str("playInExternalPlayer"),
-            Token::Bool(false),
             Token::Str("hardwareDecoding"),
             Token::Bool(true),
+            Token::Str("frameRateMatchingStrategy"),
+            Token::UnitVariant {
+                name: "FrameRateMatchingStrategy",
+                variant: "FrameRateOnly",
+            },
+            Token::Str("nextVideoNotificationDuration"),
+            Token::U32(35000),
             Token::Str("audioPassthrough"),
             Token::Bool(false),
             Token::Str("audioLanguage"),
@@ -122,9 +140,9 @@ fn settings_de() {
             Token::Str("subtitlesBackgroundColor"),
             Token::Str("#00000000"),
             Token::Str("subtitlesOutlineColor"),
-            Token::Str("#00000000"),
+            Token::Str("#000000"),
             Token::Str("seekTimeDuration"),
-            Token::U32(20000),
+            Token::U32(10000),
             Token::Str("streamingServerWarningDismissed"),
             Token::None,
             Token::StructEnd,

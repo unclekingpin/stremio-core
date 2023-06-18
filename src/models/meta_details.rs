@@ -16,16 +16,14 @@ use std::borrow::Cow;
 use std::marker::PhantomData;
 use stremio_watched_bitfield::WatchedBitField;
 
-#[derive(Clone, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(debug_assertions, derive(Debug))]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Selected {
     pub meta_path: ResourcePath,
     pub stream_path: Option<ResourcePath>,
 }
 
-#[derive(Default, Serialize)]
-#[cfg_attr(debug_assertions, derive(Debug))]
+#[derive(Default, Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct MetaDetails {
     pub selected: Option<Selected>,
@@ -44,11 +42,8 @@ impl<E: Env + 'static> UpdateWithCtx<E> for MetaDetails {
                 let selected_effects = eq_update(&mut self.selected, Some(selected.to_owned()));
                 let meta_items_effects =
                     meta_items_update::<E>(&mut self.meta_items, &self.selected, &ctx.profile);
-                let meta_streams_effects = meta_streams_update::<E>(
-                    &mut self.meta_streams,
-                    &self.selected,
-                    &self.meta_items,
-                );
+                let meta_streams_effects =
+                    meta_streams_update(&mut self.meta_streams, &self.selected, &self.meta_items);
                 let streams_effects =
                     streams_update::<E>(&mut self.streams, &self.selected, &ctx.profile);
                 let library_item_effects = library_item_update::<E>(
@@ -58,7 +53,7 @@ impl<E: Env + 'static> UpdateWithCtx<E> for MetaDetails {
                     &ctx.library,
                 );
                 let watched_effects =
-                    watched_update::<E>(&mut self.watched, &self.meta_items, &self.library_item);
+                    watched_update(&mut self.watched, &self.meta_items, &self.library_item);
                 let libraty_item_sync_effects = library_item_sync(&self.library_item, &ctx.profile);
                 libraty_item_sync_effects
                     .join(selected_effects)
@@ -104,7 +99,7 @@ impl<E: Env + 'static> UpdateWithCtx<E> for MetaDetails {
                     let mut watched = watched.to_owned();
                     watched.set_video(video_id, *is_watched);
                     let mut library_item = library_item.to_owned();
-                    library_item.state.watched = Some(watched.to_string());
+                    library_item.state.watched = Some(watched.into());
                     Effects::msg(Msg::Internal(Internal::UpdateLibraryItem(library_item)))
                         .unchanged()
                 }
@@ -117,11 +112,8 @@ impl<E: Env + 'static> UpdateWithCtx<E> for MetaDetails {
                     &mut self.meta_items,
                     ResourcesAction::ResourceRequestResult { request, result },
                 );
-                let meta_streams_effects = meta_streams_update::<E>(
-                    &mut self.meta_streams,
-                    &self.selected,
-                    &self.meta_items,
-                );
+                let meta_streams_effects =
+                    meta_streams_update(&mut self.meta_streams, &self.selected, &self.meta_items);
                 let library_item_effects = library_item_update::<E>(
                     &mut self.library_item,
                     &self.selected,
@@ -129,7 +121,7 @@ impl<E: Env + 'static> UpdateWithCtx<E> for MetaDetails {
                     &ctx.library,
                 );
                 let watched_effects =
-                    watched_update::<E>(&mut self.watched, &self.meta_items, &self.library_item);
+                    watched_update(&mut self.watched, &self.meta_items, &self.library_item);
                 meta_items_effects
                     .join(meta_streams_effects)
                     .join(library_item_effects)
@@ -151,17 +143,14 @@ impl<E: Env + 'static> UpdateWithCtx<E> for MetaDetails {
                     &ctx.library,
                 );
                 let watched_effects =
-                    watched_update::<E>(&mut self.watched, &self.meta_items, &self.library_item);
+                    watched_update(&mut self.watched, &self.meta_items, &self.library_item);
                 library_item_effects.join(watched_effects)
             }
             Msg::Internal(Internal::ProfileChanged) => {
                 let meta_items_effects =
                     meta_items_update::<E>(&mut self.meta_items, &self.selected, &ctx.profile);
-                let meta_streams_effects = meta_streams_update::<E>(
-                    &mut self.meta_streams,
-                    &self.selected,
-                    &self.meta_items,
-                );
+                let meta_streams_effects =
+                    meta_streams_update(&mut self.meta_streams, &self.selected, &self.meta_items);
                 let streams_effects =
                     streams_update::<E>(&mut self.streams, &self.selected, &ctx.profile);
                 let library_item_effects = library_item_update::<E>(
@@ -171,7 +160,7 @@ impl<E: Env + 'static> UpdateWithCtx<E> for MetaDetails {
                     &ctx.library,
                 );
                 let watched_effects =
-                    watched_update::<E>(&mut self.watched, &self.meta_items, &self.library_item);
+                    watched_update(&mut self.watched, &self.meta_items, &self.library_item);
                 meta_items_effects
                     .join(meta_streams_effects)
                     .join(streams_effects)
@@ -217,7 +206,7 @@ fn meta_items_update<E: Env + 'static>(
     }
 }
 
-fn meta_streams_update<E: Env + 'static>(
+fn meta_streams_update(
     meta_streams: &mut Vec<ResourceLoadable<Vec<Stream>>>,
     selected: &Option<Selected>,
     meta_items: &[ResourceLoadable<MetaItem>],
@@ -322,7 +311,7 @@ fn library_item_update<E: Env + 'static>(
     eq_update(library_item, next_library_item)
 }
 
-fn watched_update<E: Env>(
+fn watched_update(
     watched: &mut Option<WatchedBitField>,
     meta_items: &[ResourceLoadable<MetaItem>],
     library_item: &Option<LibraryItem>,

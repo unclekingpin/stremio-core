@@ -3,16 +3,17 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use url::Url;
 
-#[derive(Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-#[cfg_attr(debug_assertions, derive(Debug))]
 pub struct Settings {
     pub interface_language: String,
     pub streaming_server_url: Url,
+    pub player_type: Option<String>,
     pub binge_watching: bool,
     pub play_in_background: bool,
-    pub play_in_external_player: bool,
     pub hardware_decoding: bool,
+    pub frame_rate_matching_strategy: FrameRateMatchingStrategy,
+    pub next_video_notification_duration: u32,
     pub audio_passthrough: bool,
     pub audio_language: String,
     pub secondary_audio_language: Option<String>,
@@ -29,13 +30,22 @@ pub struct Settings {
     pub streaming_server_warning_dismissed: Option<DateTime<Utc>>,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum FrameRateMatchingStrategy {
+    Disabled,
+    FrameRateOnly,
+    FrameRateAndResolution,
+}
+
 impl Default for Settings {
     fn default() -> Self {
         Settings {
-            binge_watching: false,
+            player_type: None,
+            binge_watching: true,
             play_in_background: true,
-            play_in_external_player: false,
             hardware_decoding: true,
+            frame_rate_matching_strategy: FrameRateMatchingStrategy::FrameRateOnly,
+            next_video_notification_duration: 35000,
             audio_passthrough: false,
             streaming_server_url: STREAMING_SERVER_URL.to_owned(),
             interface_language: "eng".to_owned(),
@@ -49,8 +59,8 @@ impl Default for Settings {
             subtitles_offset: 5,
             subtitles_text_color: "#FFFFFFFF".to_owned(),
             subtitles_background_color: "#00000000".to_owned(),
-            subtitles_outline_color: "#00000000".to_owned(),
-            seek_time_duration: 20000,
+            subtitles_outline_color: "#000000".to_owned(),
+            seek_time_duration: 10000,
             streaming_server_warning_dismissed: None,
         }
     }

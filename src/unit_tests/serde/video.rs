@@ -3,8 +3,7 @@ use crate::types::resource::{
     MetaItem, MetaItemPreview, SeriesInfo, StreamBehaviorHints, StreamSource, Video,
 };
 use crate::unit_tests::serde::default_tokens_ext::{DefaultFlattenTokens, DefaultTokens};
-use chrono::prelude::TimeZone;
-use chrono::Utc;
+use chrono::{TimeZone, Utc};
 use serde_test::{assert_de_tokens, assert_tokens, Token};
 
 #[test]
@@ -14,7 +13,7 @@ fn video() {
             Video {
                 id: "id".to_owned(),
                 title: "title".to_owned(),
-                released: Some(Utc.ymd(2020, 1, 1).and_hms_milli(0, 0, 0, 0)),
+                released: Some(Utc.with_ymd_and_hms(2020, 1, 1, 0, 0, 0).unwrap()),
                 overview: Some("overview".to_owned()),
                 thumbnail: Some("thumbnail".to_owned()),
                 streams: vec![],
@@ -256,7 +255,6 @@ fn videos_minimal() {
                     trailer_streams: vec![],
                 },
             ],
-            ..Default::default()
         },
         &[
             Token::Struct {
@@ -302,7 +300,7 @@ fn videos_released_equal() {
                 Video {
                     id: "2".to_owned(),
                     title: "".to_owned(),
-                    released: Some(Utc.ymd(2020, 1, 1).and_hms_milli(0, 0, 0, 0)),
+                    released: Some(Utc.with_ymd_and_hms(2020, 1, 1, 0, 0, 0).unwrap()),
                     overview: None,
                     thumbnail: None,
                     streams: vec![],
@@ -312,7 +310,7 @@ fn videos_released_equal() {
                 Video {
                     id: "1".to_owned(),
                     title: "".to_owned(),
-                    released: Some(Utc.ymd(2020, 1, 1).and_hms_milli(0, 0, 0, 0)),
+                    released: Some(Utc.with_ymd_and_hms(2020, 1, 1, 0, 0, 0).unwrap()),
                     overview: None,
                     thumbnail: None,
                     streams: vec![],
@@ -322,7 +320,7 @@ fn videos_released_equal() {
                 Video {
                     id: "3".to_owned(),
                     title: "".to_owned(),
-                    released: Some(Utc.ymd(2020, 1, 1).and_hms_milli(0, 0, 0, 0)),
+                    released: Some(Utc.with_ymd_and_hms(2020, 1, 1, 0, 0, 0).unwrap()),
                     overview: None,
                     thumbnail: None,
                     streams: vec![],
@@ -330,7 +328,6 @@ fn videos_released_equal() {
                     trailer_streams: vec![],
                 },
             ],
-            ..Default::default()
         },
         &[
             Token::Struct {
@@ -386,7 +383,7 @@ fn videos_released_sequal() {
                 Video {
                     id: "3".to_owned(),
                     title: "".to_owned(),
-                    released: Some(Utc.ymd(2020, 3, 1).and_hms_milli(0, 0, 0, 0)),
+                    released: Some(Utc.with_ymd_and_hms(2020, 3, 1, 0, 0, 0).unwrap()),
                     overview: None,
                     thumbnail: None,
                     streams: vec![],
@@ -396,7 +393,7 @@ fn videos_released_sequal() {
                 Video {
                     id: "2".to_owned(),
                     title: "".to_owned(),
-                    released: Some(Utc.ymd(2020, 2, 1).and_hms_milli(0, 0, 0, 0)),
+                    released: Some(Utc.with_ymd_and_hms(2020, 2, 1, 0, 0, 0).unwrap()),
                     overview: None,
                     thumbnail: None,
                     streams: vec![],
@@ -406,7 +403,7 @@ fn videos_released_sequal() {
                 Video {
                     id: "1".to_owned(),
                     title: "".to_owned(),
-                    released: Some(Utc.ymd(2020, 1, 1).and_hms_milli(0, 0, 0, 0)),
+                    released: Some(Utc.with_ymd_and_hms(2020, 1, 1, 0, 0, 0).unwrap()),
                     overview: None,
                     thumbnail: None,
                     streams: vec![],
@@ -434,7 +431,6 @@ fn videos_released_sequal() {
                     trailer_streams: vec![],
                 },
             ],
-            ..Default::default()
         },
         &[
             Token::Struct {
@@ -499,7 +495,7 @@ fn various_videos_deserialization() {
                 Video {
                     id: "S01E01".to_owned(),
                     title: "".to_owned(),
-                    released: Some(Utc.ymd(2020, 1, 1).and_hms_milli(0, 0, 0, 0)),
+                    released: Some(Utc.with_ymd_and_hms(2020, 1, 1, 0, 0, 0).unwrap()),
                     overview: None,
                     thumbnail: None,
                     streams: vec![],
@@ -512,7 +508,7 @@ fn various_videos_deserialization() {
                 Video {
                     id: "S01E02".to_owned(),
                     title: "".to_owned(),
-                    released: Some(Utc.ymd(2020, 2, 1).and_hms_milli(0, 0, 0, 0)),
+                    released: Some(Utc.with_ymd_and_hms(2020, 2, 1, 0, 0, 0).unwrap()),
                     overview: None,
                     thumbnail: None,
                     streams: vec![],
@@ -525,7 +521,7 @@ fn various_videos_deserialization() {
                 Video {
                     id: "S02E01".to_owned(),
                     title: "".to_owned(),
-                    released: Some(Utc.ymd(2020, 3, 1).and_hms_milli(0, 0, 0, 0)),
+                    released: Some(Utc.with_ymd_and_hms(2020, 3, 1, 0, 0, 0).unwrap()),
                     overview: None,
                     thumbnail: None,
                     streams: vec![],
@@ -538,7 +534,7 @@ fn various_videos_deserialization() {
                 Video {
                     id: "special1".to_owned(),
                     title: "".to_owned(),
-                    released: Some(Utc.ymd(2020, 5, 1).and_hms_milli(0, 0, 0, 0)),
+                    released: Some(Utc.with_ymd_and_hms(2020, 5, 1, 0, 0, 0).unwrap()),
                     overview: None,
                     thumbnail: None,
                     streams: vec![],
@@ -551,7 +547,7 @@ fn various_videos_deserialization() {
                 Video {
                     id: "special2".to_owned(),
                     title: "".to_owned(),
-                    released: Some(Utc.ymd(2020, 5, 1).and_hms_milli(0, 0, 0, 0)),
+                    released: Some(Utc.with_ymd_and_hms(2020, 5, 1, 0, 0, 0).unwrap()),
                     overview: None,
                     thumbnail: None,
                     streams: vec![],
@@ -564,7 +560,7 @@ fn various_videos_deserialization() {
                 Video {
                     id: "M1".to_owned(),
                     title: "".to_owned(),
-                    released: Some(Utc.ymd(2020, 1, 1).and_hms_milli(0, 0, 0, 0)),
+                    released: Some(Utc.with_ymd_and_hms(2020, 1, 1, 0, 0, 0).unwrap()),
                     overview: None,
                     thumbnail: None,
                     streams: vec![],
@@ -574,7 +570,7 @@ fn various_videos_deserialization() {
                 Video {
                     id: "M2".to_owned(),
                     title: "".to_owned(),
-                    released: Some(Utc.ymd(2020, 2, 1).and_hms_milli(0, 0, 0, 0)),
+                    released: Some(Utc.with_ymd_and_hms(2020, 2, 1, 0, 0, 0).unwrap()),
                     overview: None,
                     thumbnail: None,
                     streams: vec![],
@@ -602,7 +598,6 @@ fn various_videos_deserialization() {
                     trailer_streams: vec![],
                 },
             ],
-            ..Default::default()
         },
         &[
             Token::Struct {

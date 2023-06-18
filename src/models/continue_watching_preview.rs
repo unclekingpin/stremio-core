@@ -7,9 +7,9 @@ use crate::types::library::{LibraryBucket, LibraryItem};
 use lazysort::SortedBy;
 use serde::Serialize;
 
-#[derive(Default, Serialize)]
-#[cfg_attr(debug_assertions, derive(Debug))]
+#[derive(Default, Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
+/// The continue watching section in the app
 pub struct ContinueWatchingPreview {
     pub library_items: Vec<LibraryItem>,
 }

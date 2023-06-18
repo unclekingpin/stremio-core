@@ -221,7 +221,7 @@ fn actionctx_pulladdonsfromapi_with_user() {
             .unwrap()
             .get(PROFILE_STORAGE_KEY)
             .map_or(false, |data| {
-                serde_json::from_str::<Profile>(&data).unwrap().addons == OFFICIAL_ADDONS.to_owned()
+                serde_json::from_str::<Profile>(data).unwrap().addons == OFFICIAL_ADDONS.to_owned()
             }),
         "addons updated successfully in storage"
     );

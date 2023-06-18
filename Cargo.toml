@@ -4,6 +4,8 @@ version = "0.1.0"
 authors = ["Smart Code OOD"]
 edition = "2018"
 
+rust-version = "1.60"
+
 [workspace]
 members = [
     "stremio-derive",
@@ -15,6 +17,14 @@ members = [
 doctest = false
 
 [features]
+# TODO: env-future-send should be enabled by default
+# but our `TestEnv` for `unit_tests` uses a MutexGuard which is not Send.
+# default = ["env-future-send"]
+
+# Adds `Send` marker trait to the `Env` trait methods and `EnvFuture`.
+# It's required for environments that do not support `Send`.
+# If enabled for `wasm` it will cause a compile error!
+# see https://github.com/rustwasm/wasm-bindgen/issues/2833
 env-future-send = []
 
 [dependencies]
@@ -27,31 +37,39 @@ serde_url_params = "0.2.*"
 serde_bencode = "0.2.*"
 stremio-serde-hex = "0.1.*" # keep track of https://github.com/fspmarshall/serde-hex/pull/8
 serde_with = { version = "1.14.*", features = ["macros", "chrono"] }
+
 flate2 = "1.0.*"
 futures = "0.3.*"
+
 http = "0.2.*"
-url = { version = "2.2.*", features = ["serde"] }
-percent-encoding = "2.1.*"
-chrono = { version = "0.4.*", features = ["serde"] }
-semver = { version = "0.11.*", features = ["serde"] }
-base64 = "0.13.*"
-sha1 = "0.10.*"
-either = "1.6.*"
-enclose = "1.1.*"
-derivative = "2.2.*"
-derive_more = "0.99.*"
+url = { version = "2.2", features = ["serde"] }
+percent-encoding = "2.1"
+
+# Time
+chrono = { version = "0.4", features = ["serde"] }
+
+semver = { version = "1", features = ["serde"] }
+base64 = { version = "0.21"}
+sha1 = "0.10"
+either = "1.6"
+enclose = "1.1"
+derivative = "2.2"
+derive_more = "0.99"
 boolinator = "2.4.*"
-strum = "0.22.*"
-strum_macros = "0.22.*"
-lazysort = "0.2.*"
-lazy_static = "1.4.*"
-itertools = "0.10.*"
-magnet-url = "2.0.*"
-hex = "0.4.*"
-anyhow = "1.0.*"
+strum = { version = "0.24", features = ["derive"] }
+lazysort = "0.2"
+lazy_static = "1.4"
+itertools = "0.10"
+magnet-url = "2.0"
+hex = "0.4"
+anyhow = "1.0"
+regex = "1.8"
+
+# Tracing
+tracing = "0.1"
 
 [dev-dependencies]
-tokio = { version = "1.12.*", features = ["rt"] }
+tokio = { version = "1.12", features = ["rt", "macros"] }
 tokio-current-thread = "=0.2.0-alpha.1"
-serde_test = "1.0.*"
-assert_matches = "1.5.*"
+serde_test = "1.0"
+assert_matches = "1.5"

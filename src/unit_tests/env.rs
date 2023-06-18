@@ -28,7 +28,7 @@ lazy_static! {
 pub type FetchHandler =
     Box<dyn Fn(Request) -> TryEnvFuture<Box<dyn Any + Send>> + Send + Sync + 'static>;
 
-#[derive(Default, Debug, Clone, PartialEq)]
+#[derive(Default, Clone, Debug, PartialEq, Eq)]
 pub struct Request {
     pub url: String,
     pub method: String,
@@ -104,12 +104,7 @@ impl TestEnv {
 }
 
 impl Env for TestEnv {
-    fn fetch<
-        #[cfg(not(feature = "env-future-send"))] IN: Serialize + 'static,
-        #[cfg(feature = "env-future-send")] IN: Serialize + Send + 'static,
-        #[cfg(not(feature = "env-future-send"))] OUT: for<'de> Deserialize<'de> + 'static,
-        #[cfg(feature = "env-future-send")] OUT: for<'de> Deserialize<'de> + Send + 'static,
-    >(
+    fn fetch<IN: Serialize + 'static, OUT: for<'de> Deserialize<'de> + 'static>(
         request: http::Request<IN>,
     ) -> TryEnvFuture<OUT> {
         let request = Request::from(request);
@@ -118,22 +113,17 @@ impl Env for TestEnv {
             .map_ok(|resp| {
                 *resp
                     .downcast::<OUT>()
-                    .expect(&format!("Failed to downcast to {}", type_name::<OUT>()))
+                    .unwrap_or_else(|_| panic!("Failed to downcast to {}", type_name::<OUT>()))
             })
             .boxed_env()
     }
-    fn get_storage<
-        #[cfg(not(feature = "env-future-send"))] T: for<'de> Deserialize<'de> + 'static,
-        #[cfg(feature = "env-future-send")] T: for<'de> Deserialize<'de> + Send + 'static,
-    >(
-        key: &str,
-    ) -> TryEnvFuture<Option<T>> {
+    fn get_storage<T: for<'de> Deserialize<'de> + 'static>(key: &str) -> TryEnvFuture<Option<T>> {
         future::ok(
             STORAGE
                 .read()
                 .unwrap()
                 .get(key)
-                .map(|data| serde_json::from_str(&data).unwrap()),
+                .map(|data| serde_json::from_str(data).unwrap()),
         )
         .boxed_env()
     }
@@ -145,26 +135,16 @@ impl Env for TestEnv {
         };
         future::ok(()).boxed_env()
     }
-    fn exec_concurrent<
-        #[cfg(not(feature = "env-future-send"))] F: Future<Output = ()> + 'static,
-        #[cfg(feature = "env-future-send")] F: Future<Output = ()> + Send + 'static,
-    >(
-        future: F,
-    ) {
+    fn exec_concurrent<F: Future<Output = ()> + 'static>(future: F) {
         tokio_current_thread::spawn(future);
     }
-    fn exec_sequential<
-        #[cfg(not(feature = "env-future-send"))] F: Future<Output = ()> + 'static,
-        #[cfg(feature = "env-future-send")] F: Future<Output = ()> + Send + 'static,
-    >(
-        future: F,
-    ) {
+    fn exec_sequential<F: Future<Output = ()> + 'static>(future: F) {
         tokio_current_thread::spawn(future);
     }
     fn now() -> DateTime<Utc> {
         *NOW.read().unwrap()
     }
-    fn flush_analytics() -> EnvFuture<()> {
+    fn flush_analytics() -> EnvFuture<'static, ()> {
         future::ready(()).boxed_env()
     }
     fn analytics_context(
@@ -175,7 +155,7 @@ impl Env for TestEnv {
         serde_json::Value::Null
     }
     fn log(message: String) {
-        println!("{}", message)
+        println!("{message}")
     }
 }
 

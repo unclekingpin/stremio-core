@@ -3,8 +3,7 @@ use derive_more::{From, Into};
 use serde::{Deserialize, Serialize};
 use url::Url;
 
-#[derive(Clone, From, Into, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(debug_assertions, derive(Debug))]
+#[derive(Clone, From, Into, PartialEq, Eq, Serialize, Deserialize, Debug)]
 #[serde(from = "(String, String)", into = "(String, String)")]
 pub struct ExtraValue {
     pub name: String,
@@ -51,13 +50,33 @@ impl ExtraExt for Vec<ExtraValue> {
     }
 }
 
-#[derive(Clone, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(debug_assertions, derive(Debug))]
+/// The full resource path, query, etc. for Addon requests
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize, Debug)]
 #[cfg_attr(test, derive(Default))]
 pub struct ResourcePath {
+    /// The resource we want to fetch from the addon.
+    ///
+    /// # Examples
+    ///
+    /// - [`CATALOG_RESOURCE_NAME`](crate::constants::CATALOG_RESOURCE_NAME)
+    /// - [`META_RESOURCE_NAME`](crate::constants::META_RESOURCE_NAME)
+    /// - [`SUBTITLES_RESOURCE_NAME`](crate::constants::SUBTITLES_RESOURCE_NAME)
+    /// - [`STREAM_RESOURCE_NAME`](crate::constants::STREAM_RESOURCE_NAME)
     pub resource: String,
+    /// # Examples
+    ///
+    /// - `series`
+    /// - `channel`
     pub r#type: String,
+    /// The id of the endpoint that we want to request.
+    /// This could, for example:
+    /// - `last-videos/{extra}.json`
+    /// - `tt7440726` (`meta/series/tt7440726.json`)
     pub id: String,
+    /// Extra query parameters to be passed to the endpoint
+    ///
+    /// When calling the endpoint using the [`AddonHTTPTransport`](crate::addon_transport::AddonHTTPTransport),
+    /// they will be encoded using [`query_params_encode`](crate::types::query_params_encode).
     pub extra: Vec<ExtraValue>,
 }
 
@@ -93,8 +112,7 @@ impl ResourcePath {
     }
 }
 
-#[derive(Clone, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(debug_assertions, derive(Debug))]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize, Debug)]
 pub struct ResourceRequest {
     pub base: Url,
     pub path: ResourcePath,
@@ -110,8 +128,7 @@ impl ResourceRequest {
     }
 }
 
-#[derive(Clone)]
-#[cfg_attr(debug_assertions, derive(Debug))]
+#[derive(Clone, Debug)]
 pub enum AggrRequest<'a> {
     AllCatalogs {
         extra: &'a Vec<ExtraValue>,

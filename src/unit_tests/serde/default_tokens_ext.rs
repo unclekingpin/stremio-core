@@ -104,28 +104,33 @@ impl DefaultTokens for PosterShape {
 
 impl DefaultTokens for ManifestPreview {
     fn default_tokens() -> Vec<Token> {
-        vec![
-            Token::Struct {
-                name: "ManifestPreview",
-                len: 7,
-            },
-            Token::Str("id"),
-            Token::Str(""),
-            Token::Str("version"),
-            Token::Str("0.0.1"),
-            Token::Str("name"),
-            Token::Str(""),
-            Token::Str("description"),
-            Token::None,
-            Token::Str("logo"),
-            Token::None,
-            Token::Str("background"),
-            Token::None,
-            Token::Str("types"),
-            Token::Seq { len: Some(0) },
-            Token::SeqEnd,
-            Token::StructEnd,
+        [
+            vec![
+                Token::Struct {
+                    name: "ManifestPreview",
+                    len: 8,
+                },
+                Token::Str("id"),
+                Token::Str(""),
+                Token::Str("version"),
+                Token::Str("0.0.1"),
+                Token::Str("name"),
+                Token::Str(""),
+                Token::Str("description"),
+                Token::None,
+                Token::Str("logo"),
+                Token::None,
+                Token::Str("background"),
+                Token::None,
+                Token::Str("types"),
+                Token::Seq { len: Some(0) },
+                Token::SeqEnd,
+                Token::Str("behaviorHints"),
+            ],
+            ManifestBehaviorHints::default_tokens(),
+            vec![Token::StructEnd],
         ]
+        .concat()
     }
 }
 
@@ -368,20 +373,27 @@ impl DefaultTokens for Settings {
         vec![
             Token::Struct {
                 name: "Settings",
-                len: 20,
+                len: 22,
             },
             Token::Str("interfaceLanguage"),
             Token::Str("eng"),
             Token::Str("streamingServerUrl"),
             Token::Str("http://127.0.0.1:11470/"),
+            Token::Str("playerType"),
+            Token::None,
             Token::Str("bingeWatching"),
-            Token::Bool(false),
+            Token::Bool(true),
             Token::Str("playInBackground"),
             Token::Bool(true),
-            Token::Str("playInExternalPlayer"),
-            Token::Bool(false),
             Token::Str("hardwareDecoding"),
             Token::Bool(true),
+            Token::Str("frameRateMatchingStrategy"),
+            Token::UnitVariant {
+                name: "FrameRateMatchingStrategy",
+                variant: "FrameRateOnly",
+            },
+            Token::Str("nextVideoNotificationDuration"),
+            Token::U32(35000),
             Token::Str("audioPassthrough"),
             Token::Bool(false),
             Token::Str("audioLanguage"),
@@ -405,9 +417,9 @@ impl DefaultTokens for Settings {
             Token::Str("subtitlesBackgroundColor"),
             Token::Str("#00000000"),
             Token::Str("subtitlesOutlineColor"),
-            Token::Str("#00000000"),
+            Token::Str("#000000"),
             Token::Str("seekTimeDuration"),
-            Token::U32(20000),
+            Token::U32(10000),
             Token::Str("streamingServerWarningDismissed"),
             Token::None,
             Token::StructEnd,

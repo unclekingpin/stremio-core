@@ -8,8 +8,7 @@ use serde::Serialize;
 use std::convert::TryFrom;
 use std::fmt;
 
-#[derive(Clone, PartialEq, Serialize)]
-#[cfg_attr(debug_assertions, derive(Debug))]
+#[derive(Clone, PartialEq, Serialize, Debug)]
 #[serde(tag = "type", content = "content")]
 pub enum ResourceError {
     EmptyContent,
@@ -22,16 +21,15 @@ impl fmt::Display for ResourceError {
         match &self {
             ResourceError::EmptyContent => write!(f, "EmptyContent"),
             ResourceError::UnexpectedResponse(message) => {
-                write!(f, "UnexpectedResponse: {}", message)
+                write!(f, "UnexpectedResponse: {message}")
             }
             ResourceError::Env(error) => write!(f, "Env: {}", error.message()),
         }
     }
 }
 
-/// When we want to fetch meta items, streams and catalogues
-#[derive(Clone, PartialEq, Serialize)]
-#[cfg_attr(debug_assertions, derive(Debug))]
+/// When we want to fetch meta items, streams and catalogs
+#[derive(Clone, PartialEq, Serialize, Debug)]
 pub struct ResourceLoadable<T> {
     pub request: ResourceRequest,
     pub content: Option<Loadable<T, ResourceError>>,
@@ -56,6 +54,26 @@ pub enum ResourcesAction<'a> {
         request: &'a ResourceRequest,
         result: &'a Result<ResourceResponse, EnvError>,
     },
+}
+
+impl<T> ResourceLoadable<T> {
+    pub fn update<E>(&mut self, action: ResourceAction) -> Effects
+    where
+        E: Env + 'static,
+        T: TryFrom<ResourceResponse, Error = &'static str>,
+    {
+        resource_update::<E, T>(self, action)
+    }
+}
+
+impl<T> ResourceLoadable<Vec<T>> {
+    pub fn update_with_vector_content<E>(&mut self, action: ResourceAction) -> Effects
+    where
+        E: Env + 'static,
+        Vec<T>: TryFrom<ResourceResponse, Error = &'static str>,
+    {
+        resource_update_with_vector_content::<E, T>(self, action)
+    }
 }
 
 pub fn resource_update<E, T>(resource: &mut ResourceLoadable<T>, action: ResourceAction) -> Effects

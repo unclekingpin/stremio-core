@@ -5,13 +5,12 @@ use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, DefaultOnError, DefaultOnNull, NoneAsEmptyString};
 use std::marker::PhantomData;
-use stremio_watched_bitfield::WatchedBitField;
+use stremio_watched_bitfield::{WatchedBitField, WatchedField};
 use url::Url;
 
 #[serde_as]
-#[derive(Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-#[cfg_attr(debug_assertions, derive(Debug))]
 pub struct LibraryItem {
     #[serde(rename = "_id")]
     pub id: String,
@@ -24,9 +23,11 @@ pub struct LibraryItem {
     pub poster_shape: PosterShape,
     pub removed: bool,
     pub temp: bool,
+    /// Creation time
     #[serde(default, rename = "_ctime")]
     #[serde_as(deserialize_as = "DefaultOnNull<NoneAsEmptyString>")]
     pub ctime: Option<DateTime<Utc>>,
+    /// Modification time
     #[serde(rename = "_mtime")]
     pub mtime: DateTime<Utc>,
     pub state: LibraryItemState,
@@ -87,9 +88,8 @@ impl From<(&MetaItemPreview, &LibraryItem)> for LibraryItem {
 }
 
 #[serde_as]
-#[derive(Default, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-#[cfg_attr(debug_assertions, derive(Debug))]
 pub struct LibraryItemState {
     #[serde(default)]
     #[serde_as(deserialize_as = "DefaultOnNull<NoneAsEmptyString>")]
@@ -97,21 +97,31 @@ pub struct LibraryItemState {
     pub time_watched: u64,
     pub time_offset: u64,
     pub overall_time_watched: u64,
+    /// Shows how many times this item has been watched.
+    ///
+    /// Incremented once for each video watched
+    /// or in the case of no videos - every time
     pub times_watched: u32,
     // @TODO: consider bool that can be deserialized from an integer
     pub flagged_watched: u32,
     pub duration: u64,
+    /// The last video watched.
+    ///
+    /// - For meta's without videos it's either `behavior_hints.default_video_id` (if present) or the `meta.id`
+    /// - For meta's with video - the played video.
     #[serde(default, rename = "video_id")]
     #[serde_as(deserialize_as = "DefaultOnNull<NoneAsEmptyString>")]
     pub video_id: Option<String>,
-    // @TODO bitfield, special type
+    /// Field tracking watched videos.
+    /// For [`LibraryItem`]s without videos, this field should [`None`].
     #[serde(default)]
     #[serde_as(deserialize_as = "DefaultOnNull<NoneAsEmptyString>")]
-    pub watched: Option<String>,
-    // release date of last observed video
+    pub watched: Option<WatchedField>,
+    /// Release date of last observed video
     #[serde(default)]
     #[serde_as(deserialize_as = "DefaultOnNull<NoneAsEmptyString>")]
     pub last_vid_released: Option<DateTime<Utc>>,
+    /// Weather or not to receive notification for the given [`LibraryItem`].
     pub no_notif: bool,
 }
 
@@ -159,8 +169,12 @@ impl LibraryItemState {
             .cloned()
             .collect::<Vec<_>>();
         match &self.watched {
-            Some(watched) => {
-                match WatchedBitField::construct_and_resize(watched, video_ids.to_owned()) {
+            Some(watched_field) => {
+                // TODO: Construct WatchedBitField from `BitField8`
+                match WatchedBitField::construct_with_videos(
+                    watched_field.to_owned(),
+                    video_ids.to_owned(),
+                ) {
                     Ok(watched) => watched,
                     Err(_) => WatchedBitField::construct_from_array(vec![], video_ids),
                 }
